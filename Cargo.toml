@@ -1,0 +1,24 @@
+[package]
+name = "overdrive"
+version = "2.0.0"
+edition = "2021"
+description = "OVERDRIVE - a two-player terminal bullet-hell where the guns fire themselves"
+license = "MIT"
+
+# Zero dependencies on purpose: the terminal layer talks to the console API
+# directly, so the whole thing builds with nothing but rustc.
+[dependencies]
+
+[lib]
+name = "overdrive"
+path = "src/lib.rs"
+
+[[bin]]
+name = "overdrive"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2
+lto = true
+codegen-units = 1
+panic = "abort"
