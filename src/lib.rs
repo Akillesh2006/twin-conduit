@@ -1,11 +1,13 @@
-//! OVERDRIVE - a two-player, one-keyboard terminal bullet-hell.
+//! CONDUIT - a two-player, one-keyboard terminal game.
 //!
-//! Both operators carry an automatic cannon. The guns pick their own targets, so
-//! every decision the players make is about *movement*: dodge the storm of enemy
-//! fire, hold the line, and keep each other alive. Every fifth wave is a boss.
+//! Two operators are joined by an energy conduit. The conduit is your only weapon
+//! and it only burns when the pair is stretched apart.
 //!
-//! The crate has **no dependencies**: the terminal layer talks to the Win32
-//! console (or POSIX termios) directly, so it compiles with nothing but `rustc`.
+//! * CLOSE (dist <= REST_DIST) -> conduit cold -> shared charge RECHARGES
+//! * FAR (dist >= HOT_DIST)   -> conduit hot  -> anything it touches DIES, charge DRAINS
+//! * Beyond SNAP_DIST the conduit snaps.
+//!
+//! Zero dependencies. Hand-rolled Win32 console & POSIX platform layer.
 
 pub mod app;
 pub mod canvas;

@@ -39,7 +39,6 @@ impl App {
         }
     }
 
-    /// Begin a fresh run with a new field of the current size.
     pub fn restart(&mut self) {
         self.world = World::new(self.layout.field());
         self.won = false;
@@ -51,7 +50,6 @@ impl App {
         self.restart();
     }
 
-    /// Recompute the layout; a field-size change forces a new run.
     pub fn relayout(&mut self, tw: i32, th: i32) {
         let next = ui::compute_layout(tw, th);
         let changed = next.field_w != self.layout.field_w || next.field_h != self.layout.field_h;
@@ -77,7 +75,8 @@ impl App {
                     self.mode = Mode::Pause;
                     return;
                 }
-                let events = self.world.step(inp.dirs());
+                let mut events = Vec::new();
+                self.world.step(inp.dirs(), &mut events);
                 for e in &events {
                     if matches!(e, Ev::Win) {
                         self.won = true;
@@ -115,10 +114,9 @@ impl App {
             return;
         }
         match self.mode {
-            Mode::Title => ui::draw_title(cv, self.t, self.best),
+            Mode::Title => ui::draw_title(cv, &l, self.t),
             Mode::Run | Mode::Pause | Mode::Over => {
                 let (sx, sy) = fx.shake(self.world.shake);
-                // Never shake upward into the HUD row; sideways and down is fine.
                 crate::scene::draw_arena(
                     cv,
                     &self.world,
@@ -127,12 +125,11 @@ impl App {
                     l.oy + sy.max(0).min(1),
                     self.t,
                 );
+                fx.draw(cv, self.world.field, l.ox + sx.clamp(-1, 1), l.oy + sy.max(0).min(1));
                 ui::draw_hud(cv, &self.world, &l, self.t);
                 match self.mode {
                     Mode::Pause => ui::draw_pause(cv, &l),
-                    Mode::Over => {
-                        ui::draw_gameover(cv, &self.world, &l, self.won, self.t, self.best)
-                    }
+                    Mode::Over => ui::draw_gameover(cv, &self.world, &l, self.won),
                     _ => {}
                 }
             }

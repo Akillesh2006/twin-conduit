@@ -1,20 +1,16 @@
 [package]
-name = "overdrive"
-version = "2.0.0"
+name = "conduit"
+version = "1.0.0"
 edition = "2021"
-description = "OVERDRIVE - a two-player terminal bullet-hell where the guns fire themselves"
+description = "CONDUIT - a two-player terminal game where the beam is your only weapon"
 license = "MIT"
 
-# Zero dependencies on purpose: the terminal layer talks to the console API
-# directly, so the whole thing builds with nothing but rustc.
-[dependencies]
-
 [lib]
-name = "overdrive"
+name = "conduit"
 path = "src/lib.rs"
 
 [[bin]]
-name = "overdrive"
+name = "conduit"
 path = "src/main.rs"
 
 [profile.release]

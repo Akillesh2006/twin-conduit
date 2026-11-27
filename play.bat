@@ -1,5 +1,5 @@
 @echo off
-title OVERDRIVE - 2-Player Monster Defense
+title CONDUIT - Two Operators, One Conduit
 cd /d "%~dp0"
 mode con: cols=100 lines=32
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1"

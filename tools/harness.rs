@@ -1,11 +1,6 @@
 //! Headless harness: drives the real `App` / `Canvas` / `World` and exposes a
 //! few C functions so it can be run from Node via WASM.
 //!
-//! This exists because building a native binary on this machine is possible but
-//! *running* one is blocked by Smart App Control. Compiling to wasm needs no
-//! external linker, and Node executes it, so we can validate the actual
-//! rendering and simulation code paths end to end.
-//!
 //! Build:
 //!   rustc --target wasm32-unknown-unknown --crate-type cdylib -O \
 //!         tools/harness.rs -o tools/harness.wasm
@@ -46,19 +41,6 @@ static mut INPUT: Option<Input> = None;
 static mut FX: Option<Fx> = None;
 static mut NOW: u64 = 0;
 static mut OUT: Vec<u8> = Vec::new();
-
-fn app() -> &'static mut App {
-    unsafe { APP.as_mut().unwrap() }
-}
-fn canvas() -> &'static mut Canvas {
-    unsafe { CANVAS.as_mut().unwrap() }
-}
-fn input() -> &'static mut Input {
-    unsafe { INPUT.as_mut().unwrap() }
-}
-fn fx() -> &'static mut Fx {
-    unsafe { FX.as_mut().unwrap() }
-}
 
 fn dir_of(code: i32) -> Option<Dir> {
     match code {
@@ -103,8 +85,6 @@ pub extern "C" fn init(tw: i32, th: i32) {
     }
 }
 
-/// Advance one simulation step. `d0`/`d1` are -1 (none) or 0..3 = U/D/L/R.
-/// `bits` is a bitmask of Flags: 1 confirm, 2 quit, 4 pause, 8 restart.
 #[no_mangle]
 pub extern "C" fn step(d0: i32, d1: i32, bits: i32) {
     unsafe {
@@ -143,8 +123,6 @@ fn set_dir(inp: &mut Input, player: usize, code: i32) {
     inp.feed(KeyEv::Press(key, Mods::plain()));
 }
 
-/// Synthesise a real key event through the input state machine.
-/// `kind`: 0 press, 1 release, 2 repeat, 3 focus lost.
 #[no_mangle]
 pub extern "C" fn key_event(id: i32, kind: i32) {
     unsafe {
@@ -160,7 +138,6 @@ pub extern "C" fn key_event(id: i32, kind: i32) {
     }
 }
 
-/// Draw the current screen without advancing the simulation (for headless runs).
 #[no_mangle]
 pub extern "C" fn draw_now() {
     unsafe {
@@ -171,9 +148,6 @@ pub extern "C" fn draw_now() {
     }
 }
 
-/// Advance one tick using the real input state machine (no synthetic dirs).
-/// This is the entry point used by the Node front end (`tools/play-cli.mjs`).
-/// Returns 1 when the player asked to quit from the title screen.
 #[no_mangle]
 pub extern "C" fn tick() -> i32 {
     unsafe {
@@ -198,7 +172,6 @@ pub extern "C" fn tick() -> i32 {
     }
 }
 
-/// Resize the game (terminal was resized).
 #[no_mangle]
 pub extern "C" fn resize(tw: i32, th: i32) {
     unsafe {
@@ -209,7 +182,6 @@ pub extern "C" fn resize(tw: i32, th: i32) {
     }
 }
 
-/// Plain-text frame.
 #[no_mangle]
 pub extern "C" fn render() -> i32 {
     unsafe {
@@ -219,7 +191,6 @@ pub extern "C" fn render() -> i32 {
     }
 }
 
-/// ANSI frame (exactly what the real console would receive).
 #[no_mangle]
 pub extern "C" fn render_ansi() -> i32 {
     unsafe {
@@ -229,7 +200,6 @@ pub extern "C" fn render_ansi() -> i32 {
     }
 }
 
-/// JSON snapshot of the simulation state.
 #[no_mangle]
 pub extern "C" fn state() -> i32 {
     unsafe {
@@ -249,37 +219,25 @@ pub extern "C" fn state() -> i32 {
         let foes: Vec<String> = w
             .enemies
             .iter()
-            .take(12)
-            .map(|e| format!("[{:.1},{:.1},{}]", e.pos.x, e.pos.y, e.hp))
+            .map(|e| format!("[{},{}]", e.pos.x, e.pos.y))
             .collect();
-        // Nearby threats, so the Node dodge-bot can steer around real bullets.
-        let hz: Vec<String> = w
-            .hazards
-            .iter()
-            .take(96)
-            .map(|h| format!("[{:.1},{:.1}]", h.pos.x, h.pos.y))
-            .collect();
-        let (boss_hp, boss_max) = w.boss().map(|b| (b.hp, b.max_hp)).unwrap_or((0, 0));
+
         let s = format!(
             "{{\"mode\":\"{}\",\"phase\":\"{}\",\"wave\":{},\"score\":{},\"kills\":{},\
-             \"enemies\":{},\"hazards\":{},\"shots\":{},\"pickups\":{},\
-             \"combo\":{},\"best_combo\":{},\
-             \"px\":{:.1},\"py\":{:.1},\"qx\":{:.1},\"qy\":{:.1},\
+             \"charge\":{:.1},\"dist\":{},\"hot\":{},\"arc\":{},\
+             \"px\":{},\"py\":{},\"qx\":{},\"qy\":{},\
              \"php\":{},\"qhp\":{},\"p1alive\":{},\"p2alive\":{},\
-             \"boss\":{},\"bosshp\":{},\"bossmax\":{},\
-             \"pressure\":{:.2},\"accuracy\":{:.1},\"won\":{},\"t\":{},\
-             \"foes\":[{}],\"hz\":[{}]}}",
+             \"enemies\":{},\"combo\":{},\"best_combo\":{},\
+             \"won\":{},\"foes\":[{}]}}",
             mode,
             phase,
             w.wave,
             w.score,
             w.kills,
-            w.enemies.len(),
-            w.hazards.len(),
-            w.shots.len(),
-            w.pickups.len(),
-            w.combo,
-            w.best_combo,
+            w.charge,
+            w.dist,
+            w.hot,
+            w.arc.len(),
             w.players[0].pos.x,
             w.players[0].pos.y,
             w.players[1].pos.x,
@@ -288,15 +246,11 @@ pub extern "C" fn state() -> i32 {
             w.players[1].hp,
             w.players[0].alive,
             w.players[1].alive,
-            w.boss().is_some(),
-            boss_hp,
-            boss_max,
-            w.adaptive.pressure,
-            w.accuracy(),
+            w.enemies.len(),
+            w.combo,
+            w.best_combo,
             a.won,
-            a.t,
-            foes.join(","),
-            hz.join(",")
+            foes.join(",")
         );
         OUT = s.into_bytes();
         OUT.as_ptr() as i32
@@ -308,63 +262,47 @@ pub extern "C" fn out_len() -> i32 {
     unsafe { OUT.len() as i32 }
 }
 
-/// Directly set both players' hit points, to exercise the lose path deterministically.
 #[no_mangle]
-pub extern "C" fn set_hp(v: i32) {
+pub extern "C" fn set_charge(v: f32) {
     unsafe {
-        let w = &mut APP.as_mut().unwrap().world;
-        for p in w.players.iter_mut() {
-            p.hp = v;
-            p.alive = v > 0;
-            p.invuln = 0;
-            p.revive = 0;
-        }
-        if v > 0 {
-            w.phase = game::Phase::Playing;
+        let a = APP.as_mut().unwrap();
+        a.world.charge = v;
+        if v <= 0.0 {
+            a.world.hot = false;
+            a.world.phase = game::Phase::Lost;
         }
     }
 }
 
-/// Override the adaptive director's pressure (and comfort) for testing.
-#[no_mangle]
-pub extern "C" fn set_pressure(v: f32) {
-    unsafe {
-        let a = &mut APP.as_mut().unwrap().world.adaptive;
-        a.pressure = v.clamp(0.0, 1.0);
-        a.comfort = v.clamp(0.0, 1.0);
-    }
-}
-
-/// Force a wave number (for boss / late-wave testing).
 #[no_mangle]
 pub extern "C" fn set_wave(w: u32) {
     unsafe {
         let a = APP.as_mut().unwrap();
         a.world.wave = w;
-        a.world.queued = game::wave_spec(w);
+        a.world.queued = game::wave_queue(w);
         a.world.enemies.clear();
-        a.world.hazards.clear();
-        a.world.shots.clear();
-        a.world.pickups.clear();
+        a.world.orbs.clear();
         a.world.intermission = 0;
         a.world.spawn_cd = 0;
+        a.world.banner = if w == game::TOTAL_WAVES {
+            Some(("WAVE 12 \u{00b7} THE NULL ENGAGED".into(), 60))
+        } else {
+            None
+        };
         a.world.phase = game::Phase::Playing;
     }
 }
 
-/// Clear the current wave so the game resolves it (used to test victory).
 #[no_mangle]
 pub extern "C" fn clear_wave() {
     unsafe {
         let a = APP.as_mut().unwrap();
         a.world.queued.clear();
         a.world.enemies.clear();
-        a.world.hazards.clear();
         a.world.intermission = 0;
     }
 }
 
-/// Run the simulation for `n` ticks without input, no rendering.
 #[no_mangle]
 pub extern "C" fn idle(n: i32) {
     unsafe {

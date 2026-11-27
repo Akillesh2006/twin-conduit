@@ -30,7 +30,7 @@ const KEY = {
 const MOVE = new Set([KEY.W, KEY.A, KEY.S, KEY.D, KEY.UP, KEY.DOWN, KEY.LEFT, KEY.RIGHT]);
 
 if (!process.stdout.isTTY || !process.stdin.isTTY) {
-  console.error("OVERDRIVE needs a real terminal (run it directly, not piped).");
+  console.error("CONDUIT needs a real terminal (run it directly, not piped).");
   process.exit(1);
 }
 

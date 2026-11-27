@@ -8,7 +8,7 @@
 
 use std::io::{self, Write};
 
-use overdrive::keys::{Key, KeyEv, Mods};
+use conduit::keys::{Key, KeyEv, Mods};
 
 pub fn enter() -> io::Result<()> {
     imp::enter()
