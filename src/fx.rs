@@ -63,16 +63,31 @@ impl Fx {
                 let (at, kind, combo) = (*at, *kind, *combo);
                 let (col, alt, n, spread) = match kind {
                     EnemyKind::Drifter => (pal::FOE, pal::FOE_HI, 6, 2),
+                    EnemyKind::Shooter => (pal::HAZ, pal::HAZ_HI, 10, 2),
                     EnemyKind::Hunter => (pal::FOE_HI, pal::WARN, 8, 2),
+                    EnemyKind::Dasher => (pal::RAPID, pal::WHITE, 11, 3),
                     EnemyKind::Splitter => (pal::GOLD, pal::FOE, 12, 3),
+                    EnemyKind::Shielded => (pal::SHIELD, pal::WHITE, 14, 3),
+                    EnemyKind::Leech => (pal::BOSS_HI, pal::WARN, 14, 3),
+                    EnemyKind::Bomber => (pal::HAZ_HEAVY, pal::WARN, 14, 3),
                     EnemyKind::Bulwark => (pal::FOE_ARMOR, pal::FOE, 16, 3),
+                    EnemyKind::Warden => (pal::GOLD, pal::WARN, 32, 5),
+                    EnemyKind::Hydra => (pal::BOSS, pal::BOSS_HI, 38, 5),
                     EnemyKind::Null => (pal::NULL, pal::NULL_HI, 45, 6),
                 };
                 self.burst(at, n, col, spread);
                 self.burst(at, n / 3, alt, spread + 1);
                 if kind.is_boss() {
                     self.burst(at, 26, pal::WHITE, 8);
-                    self.text_pop(at, "NULL SEVERED".to_string(), pal::GOOD);
+                    let msg = match kind {
+                        EnemyKind::Warden => "WARDEN SHATTERED",
+                        EnemyKind::Hydra => "HYDRA SEVERED",
+                        _ => "NULL SEVERED",
+                    };
+                    self.text_pop(at, msg.to_string(), pal::GOOD);
+                } else if combo >= 5 && combo % 5 == 0 {
+                    self.burst(at, 12, pal::GOLD, 4);
+                    self.text_pop(at, format!("x{} SURGE!", combo), pal::GOLD);
                 } else if combo >= 3 {
                     self.text_pop(at, format!("x{}", combo), pal::GOLD);
                 }
@@ -107,12 +122,47 @@ impl Fx {
                 let (col, label) = match kind {
                     OrbKind::Charge => (pal::CHARGE, "+CHARGE"),
                     OrbKind::Mend => (pal::MEND, "+HP"),
+                    OrbKind::SlowTime => (pal::ARC_MID, "SLOW TIME"),
+                    OrbKind::Nova => (pal::GOLD, "NOVA!"),
+                    OrbKind::TwinBeam => (pal::P1_HI, "TWIN BEAM"),
                 };
-                self.burst_bias(at, 8, col, 2, -0.14);
+                self.burst_bias(at, 10, col, 2, -0.14);
                 self.text_pop(at, label.to_string(), col);
+            }
+            Ev::ChainArc { from, to } => {
+                self.burst(*from, 4, pal::P1_HI, 2);
+                self.burst(*to, 6, pal::ARC_SPARK, 2);
             }
             Ev::Spawn { at } => {
                 self.inward_ring(*at, 4, pal::MUTED, 1.5);
+            }
+            Ev::Shoot { at } => {
+                self.burst(*at, 5, pal::HAZ_HI, 2);
+            }
+            Ev::Dash { at } => {
+                self.burst(*at, 8, pal::RAPID, 3);
+                self.text_pop(*at, ">>".to_string(), pal::WARN);
+            }
+            Ev::Block { at } => {
+                self.burst(*at, 6, pal::SHIELD, 2);
+                self.text_pop(*at, "SHIELD".to_string(), pal::SHIELD);
+            }
+            Ev::Explode { at, radius } => {
+                self.burst(*at, (*radius as usize) * 14, pal::HAZ_HEAVY, radius + 3);
+                self.burst(*at, (*radius as usize) * 8, pal::GOLD, radius + 2);
+                self.text_pop(*at, "BOOM!".to_string(), pal::WARN);
+            }
+            Ev::LeechDrain { at } => {
+                self.burst(*at, 3, pal::BOSS_HI, 1);
+            }
+            Ev::PhaseShift { at, phase, .. } => {
+                self.burst(*at, 24, pal::BOSS_HI, 5);
+                self.inward_ring(*at, 10, pal::GOLD, 3.0);
+                self.text_pop(*at, format!("PHASE {}", phase), pal::GOLD);
+            }
+            Ev::TetherCut { at } => {
+                self.burst(*at, 22, pal::HAZ_HI, 5);
+                self.text_pop(*at, "CUT! -10%".to_string(), pal::HAZ_HI);
             }
             Ev::WaveClear { .. } | Ev::WaveStart { .. } | Ev::Win | Ev::Lose => {}
         }

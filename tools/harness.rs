@@ -23,10 +23,14 @@ mod keys;
 mod rng;
 #[path = "../src/scene.rs"]
 mod scene;
+#[path = "../src/scores.rs"]
+mod scores;
 #[path = "../src/ui.rs"]
 mod ui;
 #[path = "../src/app.rs"]
 mod app;
+#[path = "../src/checks.rs"]
+mod checks;
 
 use app::{App, Mode};
 use canvas::Canvas;
@@ -68,6 +72,10 @@ fn key_of(id: i32) -> Key {
         11 => Key::P,
         12 => Key::R,
         13 => Key::Q,
+        14 => Key::Num1,
+        15 => Key::Num2,
+        16 => Key::Num3,
+        17 => Key::Num4,
         _ => Key::Other,
     }
 }
@@ -82,6 +90,15 @@ pub extern "C" fn init(tw: i32, th: i32) {
         INPUT = Some(Input::new());
         FX = Some(Fx::new());
         NOW = 0;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn set_has_release(flag: i32) {
+    unsafe {
+        if let Some(inp) = INPUT.as_mut() {
+            inp.set_has_release(flag != 0);
+        }
     }
 }
 
@@ -133,7 +150,27 @@ pub extern "C" fn key_event(id: i32, kind: i32) {
             0 => inp.feed(KeyEv::Press(key_of(id), Mods::plain())),
             1 => inp.feed(KeyEv::Release(key_of(id))),
             2 => inp.feed(KeyEv::Repeat(key_of(id), Mods::plain())),
+            4 => inp.feed(KeyEv::FocusGained),
             _ => inp.feed(KeyEv::FocusLost),
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn set_paused(paused: i32) {
+    unsafe {
+        let a = APP.as_mut().unwrap();
+        let inp = INPUT.as_mut().unwrap();
+        let f = FX.as_mut().unwrap();
+        let cv = CANVAS.as_mut().unwrap();
+        if paused != 0 && a.mode == Mode::Run {
+            inp.release_all();
+            a.mode = Mode::Pause;
+            a.draw(cv, f);
+        } else if paused == 0 && a.mode == Mode::Pause {
+            inp.release_all();
+            a.mode = Mode::Run;
+            a.draw(cv, f);
         }
     }
 }
@@ -208,6 +245,7 @@ pub extern "C" fn state() -> i32 {
         let mode = match a.mode {
             Mode::Title => "title",
             Mode::Run => "run",
+            Mode::Upgrade => "upgrade",
             Mode::Pause => "pause",
             Mode::Over => "over",
         };
@@ -221,23 +259,69 @@ pub extern "C" fn state() -> i32 {
             .iter()
             .map(|e| format!("[{},{}]", e.pos.x, e.pos.y))
             .collect();
+        let bullets: Vec<String> = w
+            .bullets
+            .iter()
+            .map(|b| format!("[{:.1},{:.1}]", b.pos.x, b.pos.y))
+            .collect();
+        let blasts: Vec<String> = w
+            .blasts
+            .iter()
+            .map(|b| format!("[{},{},{}]", b.center.x, b.center.y, b.radius))
+            .collect();
+        let lasers: Vec<String> = w
+            .beam_hazards
+            .iter()
+            .map(|h| format!("[{},{},{},{},{}]", h.p0.x, h.p0.y, h.p1.x, h.p1.y, h.fuse))
+            .collect();
+        let ups: Vec<String> = w
+            .upgrades
+            .iter()
+            .map(|u| format!("\"{}\"", u.short()))
+            .collect();
+        let choices: Vec<String> = w
+            .upgrade_choices
+            .iter()
+            .map(|u| format!("\"{}\"", u.short()))
+            .collect();
+        let walls: Vec<String> = w
+            .walls
+            .iter()
+            .map(|wl| format!("[{},{},{},{}]", wl.pos.x, wl.pos.y, wl.len, if wl.vertical { 1 } else { 0 }))
+            .collect();
+        let hazards: Vec<String> = w
+            .hazards
+            .iter()
+            .map(|hz| format!("[{},{},{},{},{}]", hz.pos.x, hz.pos.y, hz.w, hz.h, if hz.warn == 0 { 1 } else { 0 }))
+            .collect();
+        let blocked = w.blocked_at.is_some();
 
         let s = format!(
-            "{{\"mode\":\"{}\",\"phase\":\"{}\",\"wave\":{},\"score\":{},\"kills\":{},\
-             \"charge\":{:.1},\"dist\":{},\"hot\":{},\"arc\":{},\
+            "{{\"mode\":\"{}\",\"phase\":\"{}\",\"difficulty\":\"{}\",\"wave\":{},\"score\":{},\"best\":{},\"kills\":{},\
+             \"time_secs\":{},\"fw\":{},\"fh\":{},\
+             \"charge\":{:.1},\"dist\":{},\"hot\":{},\"arc\":{},\"blocked\":{},\"event\":\"{}\",\
              \"px\":{},\"py\":{},\"qx\":{},\"qy\":{},\
              \"php\":{},\"qhp\":{},\"p1alive\":{},\"p2alive\":{},\
              \"enemies\":{},\"combo\":{},\"best_combo\":{},\
-             \"won\":{},\"foes\":[{}]}}",
+             \"won\":{},\"upgrades\":[{}],\"upgrade_choices\":[{}],\
+             \"foes\":[{}],\"bullets\":[{}],\"blasts\":[{}],\"lasers\":[{}],\
+             \"walls\":[{}],\"hazards\":[{}]}}",
             mode,
             phase,
+            w.difficulty.spec().name,
             w.wave,
             w.score,
+            a.best.max(w.score),
             w.kills,
+            w.elapsed_secs(),
+            w.field.w,
+            w.field.h,
             w.charge,
             w.dist,
             w.hot,
             w.arc.len(),
+            blocked,
+            w.event.label(),
             w.players[0].pos.x,
             w.players[0].pos.y,
             w.players[1].pos.x,
@@ -250,7 +334,14 @@ pub extern "C" fn state() -> i32 {
             w.combo,
             w.best_combo,
             a.won,
-            foes.join(",")
+            ups.join(","),
+            choices.join(","),
+            foes.join(","),
+            bullets.join(","),
+            blasts.join(","),
+            lasers.join(","),
+            walls.join(","),
+            hazards.join(",")
         );
         OUT = s.into_bytes();
         OUT.as_ptr() as i32
@@ -275,21 +366,50 @@ pub extern "C" fn set_charge(v: f32) {
 }
 
 #[no_mangle]
+pub extern "C" fn set_best(v: u32) {
+    unsafe {
+        let a = APP.as_mut().unwrap();
+        a.best = a.best.max(v as u64);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn set_difficulty(d: u32) {
+    unsafe {
+        let a = APP.as_mut().unwrap();
+        a.difficulty = game::Difficulty::from_idx(d as usize);
+        if a.mode == Mode::Title {
+            a.restart();
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn set_wave(w: u32) {
     unsafe {
         let a = APP.as_mut().unwrap();
         a.world.wave = w;
-        a.world.queued = game::wave_queue(w);
+        a.world.queued = game::scaled_wave_queue(w, a.world.difficulty);
         a.world.enemies.clear();
         a.world.orbs.clear();
+        a.world.bullets.clear();
+        a.world.blasts.clear();
+        a.world.beam_hazards.clear();
+        a.world.walls = game::spawn_wave_walls(a.world.field, w);
+        a.world.hazards.clear();
+        a.world.event = game::WaveEvent::None;
+        a.world.blocked_at = None;
+        a.world.draft_pending = false;
         a.world.intermission = 0;
         a.world.spawn_cd = 0;
-        a.world.banner = if w == game::TOTAL_WAVES {
-            Some(("WAVE 12 \u{00b7} THE NULL ENGAGED".into(), 60))
-        } else {
-            None
+        a.world.banner = match w {
+            4 => Some(("WAVE 04 \u{00b7} THE WARDEN".into(), 60)),
+            8 => Some(("WAVE 08 \u{00b7} THE HYDRA".into(), 60)),
+            game::TOTAL_WAVES => Some(("WAVE 12 \u{00b7} THE NULL ENGAGED".into(), 60)),
+            _ => None,
         };
         a.world.phase = game::Phase::Playing;
+        a.mode = Mode::Run;
     }
 }
 
@@ -299,6 +419,9 @@ pub extern "C" fn clear_wave() {
         let a = APP.as_mut().unwrap();
         a.world.queued.clear();
         a.world.enemies.clear();
+        a.world.bullets.clear();
+        a.world.blasts.clear();
+        a.world.beam_hazards.clear();
         a.world.intermission = 0;
     }
 }
@@ -316,4 +439,21 @@ pub extern "C" fn idle(n: i32) {
             a.update(inp, f, Flags::default());
         }
     }
+}
+
+/// Run the full Rust verification suite (`--test`) from WASM and return failure count.
+/// Writes log bytes to OUT (read via out_len()).
+#[no_mangle]
+pub extern "C" fn verify_all() -> i32 {
+    let r = checks::run_all();
+    let failed = (r.total - r.passed) as i32;
+    unsafe {
+        OUT = r.log.into_bytes();
+    }
+    failed
+}
+
+#[no_mangle]
+pub extern "C" fn out_ptr() -> i32 {
+    unsafe { OUT.as_ptr() as i32 }
 }

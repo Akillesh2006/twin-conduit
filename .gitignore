@@ -1,3 +1,4 @@
 /target
 Cargo.lock.bak
 *.pdb
+.conduit_scores.txt

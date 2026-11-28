@@ -39,8 +39,18 @@ if ($exe -and (Test-Path $exe)) {
     Write-Host "Launching CONDUIT..." -ForegroundColor Green
 
     if ($args -contains "--test" -or $args -contains "--verify") {
-        & $exe @args
-        exit $LASTEXITCODE
+        try {
+            & $exe @args
+            exit $LASTEXITCODE
+        } catch {
+            Write-Host "Native .exe blocked by Smart App Control; running Rust verification suite via WASM..." -ForegroundColor Yellow
+            $node = Get-Command node -ErrorAction SilentlyContinue
+            if ($node) {
+                & $node.Source -e "import {readFileSync} from 'node:fs'; const {instance} = await WebAssembly.instantiate(readFileSync('tools/harness.wasm'), {}); const x = instance.exports; const fails = x.verify_all(); const ptr = x.out_ptr(); const len = x.out_len(); console.log(new TextDecoder().decode(new Uint8Array(x.memory.buffer, ptr, len))); process.exit(fails ? 1 : 0);"
+                exit $LASTEXITCODE
+            }
+            throw $_
+        }
     }
 
     try {

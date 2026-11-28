@@ -11,6 +11,7 @@
 
 pub mod app;
 pub mod canvas;
+pub mod checks;
 pub mod core;
 pub mod fx;
 pub mod game;
@@ -18,4 +19,5 @@ pub mod input;
 pub mod keys;
 pub mod rng;
 pub mod scene;
+pub mod scores;
 pub mod ui;

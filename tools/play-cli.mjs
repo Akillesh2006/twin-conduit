@@ -26,6 +26,7 @@ const KEY = {
   W: 0, A: 1, S: 2, D: 3,
   UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7,
   ENTER: 8, SPACE: 9, ESC: 10, P: 11, R: 12, Q: 13,
+  N1: 14, N2: 15, N3: 16, N4: 17,
 };
 const MOVE = new Set([KEY.W, KEY.A, KEY.S, KEY.D, KEY.UP, KEY.DOWN, KEY.LEFT, KEY.RIGHT]);
 
@@ -43,8 +44,8 @@ process.stdin.resume();
 process.stdin.setEncoding("utf8");
 
 x.init(cols(), rows());
+if (typeof x.set_has_release === "function") x.set_has_release(0);
 
-const heldAt = new Map();
 let alive = true;
 
 function cleanup() {
@@ -63,9 +64,7 @@ process.on("SIGINT", () => {
 });
 
 function press(id) {
-  heldAt.set(id, Date.now());
-  // Edges (Enter / P / R / Esc) fire once per real key press; movement keys are
-  // refreshed by the repeat pass below because terminals give us no key-up.
+  // Send raw keystroke once: single tap steps 1 cell cleanly; OS repeat while held triggers steady stride.
   x.key_event(id, 0);
 }
 
@@ -96,6 +95,10 @@ function feed(text) {
       case "p": case "P": press(KEY.P); break;
       case "r": case "R": press(KEY.R); break;
       case "q": case "Q": press(KEY.Q); break;
+      case "1": press(KEY.N1); break;
+      case "2": press(KEY.N2); break;
+      case "3": press(KEY.N3); break;
+      case "4": press(KEY.N4); break;
       default: break;
     }
   }
@@ -111,12 +114,6 @@ process.stdout.on("resize", () => {
 
 function frame() {
   if (!alive) return;
-  const now = Date.now();
-  // Refresh movement holds while the key is still auto-repeating.
-  for (const id of MOVE) {
-    const seen = heldAt.get(id);
-    if (seen !== undefined && now - seen < 150) x.key_event(id, 2);
-  }
   if (x.tick() === 1) {
     cleanup();
     process.exit(0);

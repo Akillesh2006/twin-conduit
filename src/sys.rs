@@ -330,6 +330,10 @@ mod imp {
             'r' => return Key::R,
             'q' => return Key::Q,
             'c' => return Key::C,
+            '1' => return Key::Num1,
+            '2' => return Key::Num2,
+            '3' => return Key::Num3,
+            '4' => return Key::Num4,
             ' ' => return Key::Space,
             _ => {}
         }
@@ -495,6 +499,10 @@ mod imp {
                 b'r' | b'R' => Some(Key::R),
                 b'q' | b'Q' => Some(Key::Q),
                 b'c' | b'C' => Some(Key::C),
+                b'1' => Some(Key::Num1),
+                b'2' => Some(Key::Num2),
+                b'3' => Some(Key::Num3),
+                b'4' => Some(Key::Num4),
                 _ => None,
             };
             if let Some(k) = key {

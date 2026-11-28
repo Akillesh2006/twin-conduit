@@ -83,19 +83,30 @@ let sawHot = false;
 let sawCold = false;
 let minCharge = 100;
 let comboSeen = 0;
+let recharging = false;
 
 for (let tick = 0; tick < 3000; tick++) {
   const w = state();
+  if (w.mode === "upgrade") {
+    x.key_event(14, 0);
+    x.step(NONE, NONE, 0);
+    continue;
+  }
   if (w.mode !== "run") break;
 
-  // Stretch to burn, then huddle to recharge -- the intended rhythm.
-  const cycle = 260;
-  const p = tick % cycle;
-  const stretch = p < 168;
-  const midY = 13;
-  const sway = Math.sin(tick / 55) * 9;
-  const p1 = stretch ? { x: 45, y: Math.round(midY + sway) } : { x: 50, y: midY };
-  const p2 = stretch ? { x: 75, y: Math.round(midY - sway) } : { x: 53, y: midY };
+  if (w.charge < 42) recharging = true;
+  if (w.charge >= 82) recharging = false;
+
+  const focus = w.foes && w.foes.length > 0
+    ? { x: Math.max(12, Math.min(72, w.foes[0][0])), y: Math.max(6, Math.min(20, w.foes[0][1])) }
+    : { x: 42, y: 13 };
+  const sway = Math.round(Math.sin(tick / 18) * 6);
+  const p1 = recharging
+    ? { x: focus.x, y: focus.y }
+    : { x: Math.max(4, focus.x - 8), y: Math.max(3, Math.min(22, focus.y + sway)) };
+  const p2 = recharging
+    ? { x: focus.x + 2, y: focus.y }
+    : { x: Math.min(80, focus.x + 8), y: Math.max(3, Math.min(22, focus.y - sway)) };
 
   const d0 = stepToward({ x: w.px, y: w.py }, p1);
   const d1 = stepToward({ x: w.qx, y: w.qy }, p2);
@@ -177,6 +188,14 @@ console.log("\n=== PAUSE ===\n");
 console.log(render());
 x.step(NONE, NONE, 4);
 ok(state().mode === "run", "P resumes");
+const chgBeforeBlur = state().charge;
+x.key_event(-1, 3); // FocusLost (tab minimize / blur)
+x.idle(5);
+const blurState = state();
+ok(blurState.mode === "pause" && Math.abs(blurState.charge - chgBeforeBlur) < 0.01, "focus loss auto-pauses run without draining charge");
+x.key_event(-1, 4); // FocusGained (reopen tab)
+x.step(NONE, NONE, 1); // Enter resumes cleanly
+ok(state().mode === "run", "reopening tab can resume with Enter");
 
 // ------------------------------------------------------------ resize
 x.init(120, 36);
@@ -185,6 +204,7 @@ x.step(NONE, NONE, 1); // start a fresh run (init resets to title)
 
 console.log("\n=== WAVE PROGRESSION ===\n");
 let progressed = true;
+let sawDraft = false;
 for (let want = 1; want <= 12; want++) {
   const st = state();
   if (st.wave !== want) {
@@ -194,10 +214,17 @@ for (let want = 1; want <= 12; want++) {
   }
   x.set_charge(100);
   x.clear_wave();
-  x.idle(70);
+  x.idle(5);
+  if (want < 12 && state().mode === "upgrade") {
+    sawDraft = true;
+    x.key_event(14, 0); // choose upgrade card 1
+    x.step(NONE, NONE, 0);
+  }
+  x.idle(65);
 }
 const afterWaves = state();
 ok(progressed, "waves advance one after another through all 12");
+ok(sawDraft && (afterWaves.upgrades || []).length === 11, "upgrade draft occurs after clearing waves 1-11");
 ok(afterWaves.phase === "won" || afterWaves.mode === "over", `clearing wave 12 wins (phase=${afterWaves.phase})`);
 
 // ------------------------------------------------------------ resize
@@ -212,6 +239,20 @@ x.init(60, 20);
 x.step(NONE, NONE, 0);
 const small = render();
 ok(small.includes("TERMINAL TOO SMALL"), "too-small guard renders");
+
+// ------------------------------------------------------------ tap precision via tick()
+x.init(100, 32);
+x.set_has_release(0);
+x.key_event(8, 0); // Enter
+x.tick();
+const startPos = state();
+x.key_event(0, 0); // Single tap W (no key-up sent)
+for (let k = 0; k < 6; k++) x.tick();
+const afterTap = state();
+ok(
+  startPos.py - afterTap.py === 1,
+  `TTY single tap moves exactly 1 cell (moved=${startPos.py - afterTap.py})`
+);
 
 console.log("\n=========================================");
 if (failures.length) {
