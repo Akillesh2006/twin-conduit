@@ -331,32 +331,53 @@ pub fn draw_arena(cv: &mut Canvas, world: &World, fx: &Fx, ox: i32, oy: i32, t: 
         }
     }
 
-    // 6. Players
+    // 6. Players (2x2 doubled icon so both operators stand out clearly in the arena)
     for p in &world.players {
-        let (glyph, col) = if !p.alive {
-            ('X', pal::BAD)
+        let col = if !p.alive {
+            pal::BAD
         } else if p.invuln > 0 && t % 2 == 1 {
-            ('\u{25c9}', pal::WHITE)
+            pal::WHITE
         } else {
             match p.side {
-                Side::One => ('\u{25c9}', pal::P1_HI),
-                Side::Two => ('\u{25c9}', pal::P2_HI),
+                Side::One => pal::P1_HI,
+                Side::Two => pal::P2_HI,
             }
         };
 
-        cv.put(ox + p.pos.x, oy + p.pos.y, glyph, col);
+        let (ax, ay) = if f.w >= 2 && f.h >= 2 {
+            let ax = p.pos.x.clamp(0, f.w - 2);
+            let ay = p.pos.y.clamp(0, f.h - 2);
+            let cells = if !p.alive {
+                [('\u{2572}', '\u{2571}'), ('\u{2571}', '\u{2572}')] // ╲╱ / ╱╲
+            } else {
+                [('\u{259b}', '\u{259c}'), ('\u{2599}', '\u{259f}')] // ▛▜ / ▙▟
+            };
+            cv.put(ox + ax, oy + ay, cells[0].0, col);
+            cv.put(ox + ax + 1, oy + ay, cells[0].1, col);
+            cv.put(ox + ax, oy + ay + 1, cells[1].0, col);
+            cv.put(ox + ax + 1, oy + ay + 1, cells[1].1, col);
+            (ax, ay)
+        } else {
+            let glyph = if !p.alive { 'X' } else { '\u{25c9}' };
+            cv.put(ox + p.pos.x, oy + p.pos.y, glyph, col);
+            (p.pos.x, p.pos.y)
+        };
 
-        if p.alive && p.barrier > 0 && p.pos.y > 0 {
-            cv.put(ox + p.pos.x, oy + p.pos.y - 1, '\u{25e0}', pal::SHIELD); // ◠ barrier crown
+        if p.alive && p.barrier > 0 && ay > 0 {
+            cv.put(ox + ax, oy + ay - 1, '\u{25e0}', pal::SHIELD); // ◠ barrier crown
+            if f.w >= 2 {
+                cv.put(ox + ax + 1, oy + ay - 1, '\u{25e0}', pal::SHIELD);
+            }
         }
 
         // Reviving indicator
-        if !p.alive && p.revive > 0 {
+        if !p.alive && p.revive > 0 && ay > 0 {
             let frac = p.revive as f32 / REVIVE_TICKS as f32;
             let bar_w = (frac * 4.0).ceil() as i32;
             for bx in 0..bar_w {
-                if p.pos.y > 0 && p.pos.x - 1 + bx >= 0 && p.pos.x - 1 + bx < f.w {
-                    cv.put(ox + p.pos.x - 1 + bx, oy + p.pos.y - 1, '\u{2588}', pal::GOOD);
+                let rx = ax - 1 + bx;
+                if rx >= 0 && rx < f.w {
+                    cv.put(ox + rx, oy + ay - 1, '\u{2588}', pal::GOOD);
                 }
             }
         }

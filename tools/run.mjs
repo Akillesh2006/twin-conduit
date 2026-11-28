@@ -253,6 +253,14 @@ ok(
   startPos.py - afterTap.py === 1,
   `TTY single tap moves exactly 1 cell (moved=${startPos.py - afterTap.py})`
 );
+for (let k = 0; k < 50; k++) x.tick();
+x.draw_now();
+const iconFrame = render();
+ok(
+  (iconFrame.match(/\u259b\u259c/g) || []).length >= 2 &&
+    (iconFrame.match(/\u2599\u259f/g) || []).length >= 2,
+  "both players render 2x2 doubled icons"
+);
 
 console.log("\n=========================================");
 if (failures.length) {
